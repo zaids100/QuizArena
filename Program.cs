@@ -76,7 +76,18 @@ Console.WriteLine($"JWT Secret configured: {!string.IsNullOrEmpty(jwtSecret)}");
 
 // ✅ DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(
+        connectionString,
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5, // number of retry attempts
+                maxRetryDelay: TimeSpan.FromSeconds(10), // delay between retries
+                errorNumbersToAdd: null // retry all transient errors
+            );
+        }
+    ));
+
 
 // ✅ Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>

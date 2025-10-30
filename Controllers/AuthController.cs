@@ -84,8 +84,7 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    // Google sign-in using id_token from client
-    // Client: signs in with Google SDK and sends id_token to backend
+    //Redirect path for google auth
     [HttpGet("google/callback")]
     public async Task<IActionResult> GoogleCallback([FromQuery] string code)
     {
