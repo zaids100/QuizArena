@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: quizarena-api
+    env: dotnet
+    plan: free
+    buildCommand: dotnet publish -c Release -o out
+    startCommand: dotnet out/QuizArena.dll
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+
+      # ✅ Database connection string (SQL Server)
+      - key: ConnectionStrings__DbConnectionString
+        value: ${DB_CONNECTION_STRING}
+
+      # ✅ JWT configuration
+      - key: Jwt__Secret
+        value: ${JWT_SECRET}
+      - key: Jwt__Issuer
+        value: ${JWT_ISSUER}
+      - key: Jwt__Audience
+        value: ${JWT_AUDIENCE}
+
+      # ✅ Google OAuth credentials
+      - key: Authentication__Google__ClientId
+        value: ${GOOGLE_CLIENT_ID}
+      - key: Authentication__Google__ClientSecret
+        value: ${GOOGLE_CLIENT_SECRET}
