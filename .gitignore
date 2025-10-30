@@ -122,3 +122,4 @@ Icon?
 *.tgz
 *.7z
 *.rar
+.env
