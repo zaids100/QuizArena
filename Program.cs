@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using QuizArena.Data;
 using QuizArena.Models;
 using QuizArena.Services;
+using QuizArena.Repositories;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -116,6 +117,10 @@ builder.Services.Configure<TokenSettings>(options =>
     options.AccessTokenExpirationMinutes = 15;
     options.RefreshTokenExpirationDays = 30;
 });
+
+// Repositories
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 builder.Services.AddScoped<ITokenService, TokenService>();
 

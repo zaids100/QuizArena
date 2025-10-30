@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using QuizArena.Models;
 using QuizArena.Services;
+using QuizArena.Repositories;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -22,14 +23,14 @@ public class TokenSettings
 public class TokenService : ITokenService
 {
     private readonly TokenSettings _settings;
-    private readonly ApplicationDbContext _db;
-    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IRefreshTokenRepository _refreshRepo;
+    private readonly IUserRepository _userRepo;
 
-    public TokenService(IOptions<TokenSettings> settings, ApplicationDbContext db, UserManager<ApplicationUser> um)
+    public TokenService(IOptions<TokenSettings> settings, IRefreshTokenRepository refreshRepo, IUserRepository userRepo)
     {
         _settings = settings.Value;
-        _db = db;
-        _userManager = um;
+        _refreshRepo = refreshRepo;
+        _userRepo = userRepo;
     }
 
     public async Task<(string accessToken, string refreshToken, DateTimeOffset refreshTokenExpiresAt)> GenerateTokensAsync(ApplicationUser user, string createdByIp)
@@ -46,8 +47,8 @@ public class TokenService : ITokenService
             CreatedByIp = createdByIp
         };
 
-        _db.RefreshTokens.Add(dbToken);
-        await _db.SaveChangesAsync();
+        await _refreshRepo.AddAsync(dbToken);
+        await _refreshRepo.SaveChangesAsync();
 
         return (accessToken, refreshToken, refreshTokenExpiresAt);
     }
@@ -81,7 +82,7 @@ public class TokenService : ITokenService
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        var roles = await _userManager.GetRolesAsync(user);
+    var roles = await _userRepo.GetRolesAsync(user);
         foreach (var role in roles) claims.Add(new Claim(ClaimTypes.Role, role));
 
         var token = new JwtSecurityToken(
@@ -98,18 +99,18 @@ public class TokenService : ITokenService
     public async Task<ApplicationUser?> ValidateRefreshTokenAsync(string refreshToken)
     {
         var hash = ComputeSha256Hash(refreshToken);
-        var token = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
+    var token = await _refreshRepo.GetByHashAsync(hash);
 
-        if (token == null || !token.IsActive) return null;
+    if (token == null || !token.IsActive) return null;
 
-        var user = await _userManager.FindByIdAsync(token.UserId);
-        return user;
+    var user = await _userRepo.FindByIdAsync(token.UserId);
+    return user;
     }
 
     public async Task<(string newAccessToken, string newRefreshToken, DateTimeOffset refreshTokenExpiresAt)> RefreshAsync(string refreshToken, string ipAddress)
     {
         var hash = ComputeSha256Hash(refreshToken);
-        var tokenEntity = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
+        var tokenEntity = await _refreshRepo.GetByHashAsync(hash);
 
         if (tokenEntity == null || !tokenEntity.IsActive)
             throw new SecurityTokenException("Invalid refresh token");
@@ -118,7 +119,7 @@ public class TokenService : ITokenService
         tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
         tokenEntity.RevokedByIp = ipAddress;
 
-        var user = await _userManager.FindByIdAsync(tokenEntity.UserId) ?? throw new Exception("User not found");
+        var user = await _userRepo.FindByIdAsync(tokenEntity.UserId) ?? throw new Exception("User not found");
 
         var (newRefreshPlain, newExpires, newHash) = CreateRefreshTokenAndHash();
 
@@ -132,8 +133,8 @@ public class TokenService : ITokenService
             ReplacedByTokenHash = tokenEntity.TokenHash
         };
 
-        _db.RefreshTokens.Add(newDbToken);
-        await _db.SaveChangesAsync();
+        await _refreshRepo.AddAsync(newDbToken);
+        await _refreshRepo.SaveChangesAsync();
 
         var newAccess = await GenerateJwtTokenAsync(user);
         return (newAccess, newRefreshPlain, newExpires);
@@ -142,11 +143,11 @@ public class TokenService : ITokenService
     public async Task RevokeRefreshTokenAsync(string refreshToken, string ipAddress, string? reason = null)
     {
         var hash = ComputeSha256Hash(refreshToken);
-        var tok = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
+        var tok = await _refreshRepo.GetByHashAsync(hash);
         if (tok == null) return;
         tok.RevokedAt = DateTimeOffset.UtcNow;
         tok.RevokedByIp = ipAddress;
         tok.ReasonRevoked = reason;
-        await _db.SaveChangesAsync();
+        await _refreshRepo.SaveChangesAsync();
     }
 }
